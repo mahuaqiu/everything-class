@@ -10,6 +10,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 /// 定位模式处理
+#[derive(Clone)]
 pub struct LocateMode {
     active: bool,
 }
