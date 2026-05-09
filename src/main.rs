@@ -18,7 +18,12 @@ use crate::window_info::WindowInfo;
 #[derive(Default, NwgUi)]
 pub struct MainWindow {
     #[nwg_control(size: (800, 600), title: "Window Handle Finder", position: (100, 100))]
-    #[nwg_events(OnInit: [MainWindow::init], OnWindowClose: [MainWindow::close])]
+    #[nwg_events(
+        OnInit: [MainWindow::init],
+        OnWindowClose: [MainWindow::close],
+        OnMousePress: [MainWindow::handle_mouse_click(SELF, EVT)],
+        OnKeyPress: [MainWindow::handle_key_press(SELF, EVT_DATA)]
+    )]
     window: nwg::Window,
 
     #[nwg_layout(parent: window)]
@@ -352,6 +357,73 @@ impl MainWindow {
     /// 显示状态信息
     fn show_status(&self, msg: &str) {
         self.window.set_text(&format!("{} - {}", msg, "Window Handle Finder"));
+    }
+
+    /// 处理鼠标点击事件
+    fn handle_mouse_click(&self, event: nwg::Event) {
+        // 从 Event 中提取 MousePressEvent
+        let mouse_event = match event {
+            nwg::Event::OnMousePress(e) => e,
+            _ => return,
+        };
+
+        // 右键按下取消定位模式
+        if matches!(mouse_event, nwg::MousePressEvent::MousePressRightDown)
+            && self.locate_mode.borrow().is_active()
+        {
+            self.locate_mode.borrow_mut().stop();
+            self.locate_timer.stop();
+            self.locate_btn.set_text("定位");
+            self.search_box.set_text("");
+            return;
+        }
+
+        // 左键按下在定位模式下获取窗口
+        if matches!(mouse_event, nwg::MousePressEvent::MousePressLeftDown)
+            && self.locate_mode.borrow().is_active()
+        {
+            // 使用块限定借用作用域
+            let win = {
+                let mode = self.locate_mode.borrow();
+                mode.get_window_at_cursor()
+            }; // mode 在此释放
+
+            if let Some(win) = win {
+                // 结束定位模式
+                self.locate_mode.borrow_mut().stop();
+                self.locate_timer.stop();
+                self.locate_btn.set_text("定位");
+
+                // 将窗口添加到列表顶部
+                let mut state = self.data.borrow_mut();
+                state.all_windows.insert(0, win.clone());
+                state.filtered_windows.insert(0, win.clone());
+                drop(state);
+
+                self.populate_list(&self.data.borrow().filtered_windows);
+                ClipboardHelper::copy_handle(win.hwnd);
+                self.search_box.set_text("");
+                self.show_status(&format!("Handle 0x{:08X} 已复制", win.hwnd));
+            }
+        }
+    }
+
+    /// 处理键盘按键事件
+    fn handle_key_press(&self, data: &nwg::EventData) {
+        // 从 EventData 中提取虚拟键码
+        let key_code = match data {
+            nwg::EventData::OnKey(code) => *code,
+            _ => return,
+        };
+
+        // ESC (VK_ESCAPE = 27) 取消定位模式
+        if key_code == 27 && self.locate_mode.borrow().is_active()
+        {
+            self.locate_mode.borrow_mut().stop();
+            self.locate_timer.stop();
+            self.locate_btn.set_text("定位");
+            self.search_box.set_text("");
+        }
     }
 
     /// 关闭窗口
