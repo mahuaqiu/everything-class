@@ -66,6 +66,7 @@ impl TreeHelper {
     /// # 返回值
     ///
     /// 格式化的窗口显示文本
+    #[allow(dead_code)]
     pub fn format_window_simple(win: &WindowInfo) -> String {
         if win.title.is_empty() {
             format!("<无标题> [{}]", win.class_name)
@@ -86,6 +87,7 @@ impl TreeHelper {
     /// # 返回值
     ///
     /// 窗口树的总节点数
+    #[allow(dead_code)]
     pub fn count_window_nodes(window: &Rc<WindowInfo>, include_children: bool) -> usize {
         if !include_children {
             return 1;
@@ -111,6 +113,7 @@ impl TreeHelper {
     /// # 返回值
     ///
     /// 找到的窗口信息，如果未找到则返回 None
+    #[allow(dead_code)]
     pub fn find_window_by_hwnd(windows: &[Rc<WindowInfo>], hwnd: isize) -> Option<Rc<WindowInfo>> {
         for win in windows {
             if win.hwnd == hwnd {
@@ -137,6 +140,7 @@ impl TreeHelper {
     /// # 返回值
     ///
     /// 如果有子窗口返回 true，否则返回 false
+    #[allow(dead_code)]
     pub fn has_children(window: &Rc<WindowInfo>) -> bool {
         Self::load_children(window);
         !window.children.borrow().is_empty()
@@ -154,6 +158,7 @@ impl TreeHelper {
     /// # 返回值
     ///
     /// 完整路径字符串，如果未找到则返回空字符串
+    #[allow(dead_code)]
     pub fn get_window_path(windows: &[Rc<WindowInfo>], target_hwnd: isize) -> String {
         fn build_path(
             window: &Rc<WindowInfo>,
@@ -165,7 +170,7 @@ impl TreeHelper {
                     path.push_str(" > ");
                 }
                 path.push_str(&if window.title.is_empty() {
-                    format!("<无标题>")
+                    "<无标题>".to_string()
                 } else {
                     window.title.clone()
                 });
@@ -179,7 +184,7 @@ impl TreeHelper {
                     path.push_str(" > ");
                 }
                 path.push_str(&if window.title.is_empty() {
-                    format!("<无标题>")
+                    "<无标题>".to_string()
                 } else {
                     window.title.clone()
                 });

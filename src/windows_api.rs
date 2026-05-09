@@ -81,14 +81,6 @@ impl WindowsApi {
             .to_string()
     }
 
-    /// 判断窗口是否可见
-    pub fn is_window_visible(hwnd: isize) -> bool {
-        use windows::Win32::UI::WindowsAndMessaging::IsWindowVisible;
-        use windows::Win32::Foundation::HWND;
-
-        unsafe { IsWindowVisible(HWND(hwnd as *mut c_void)).as_bool() }
-    }
-
     /// 遍历所有顶层窗口
     pub fn enum_windows() -> Vec<Rc<WindowInfo>> {
         let mut windows: Vec<Rc<WindowInfo>> = Vec::new();
