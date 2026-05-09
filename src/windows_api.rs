@@ -1,6 +1,11 @@
 use std::ffi::c_void;
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
+use std::rc::Rc;
+
+use crate::window_info::WindowInfo;
+use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+use windows::Win32::UI::WindowsAndMessaging::{EnumChildWindows, EnumWindows};
 
 /// Windows API 调用封装
 pub struct WindowsApi;
@@ -83,4 +88,60 @@ impl WindowsApi {
 
         unsafe { IsWindowVisible(HWND(hwnd as *mut c_void)).as_bool() }
     }
+
+    /// 遍历所有顶层窗口
+    pub fn enum_windows() -> Vec<Rc<WindowInfo>> {
+        let mut windows: Vec<Rc<WindowInfo>> = Vec::new();
+
+        unsafe {
+            let _ = EnumWindows(
+                Some(enum_windows_callback),
+                LPARAM(&mut windows as *mut Vec<Rc<WindowInfo>> as isize),
+            );
+        }
+
+        windows
+    }
+
+    /// 遍历指定窗口的子窗口
+    pub fn enum_child_windows(parent_hwnd: isize) -> Vec<Rc<WindowInfo>> {
+        let mut children: Vec<Rc<WindowInfo>> = Vec::new();
+
+        unsafe {
+            let _ = EnumChildWindows(
+                HWND(parent_hwnd as *mut c_void),
+                Some(enum_child_windows_callback),
+                LPARAM(&mut children as *mut Vec<Rc<WindowInfo>> as isize),
+            );
+        }
+
+        children
+    }
+
+    /// 创建 WindowInfo 对象
+    pub fn create_window_info(hwnd: isize) -> Rc<WindowInfo> {
+        Rc::new(WindowInfo::new(
+            hwnd,
+            Self::get_window_title(hwnd),
+            Self::get_class_name(hwnd),
+            Self::get_window_pid(hwnd),
+            Self::get_process_name(Self::get_window_pid(hwnd)),
+        ))
+    }
+}
+
+/// EnumWindows 回调函数
+extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    let windows = unsafe { &mut *(lparam.0 as *mut Vec<Rc<WindowInfo>>) };
+    let info = WindowsApi::create_window_info(hwnd.0 as isize);
+    windows.push(info);
+    BOOL(1) // 继续枚举
+}
+
+/// EnumChildWindows 回调函数
+extern "system" fn enum_child_windows_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    let children = unsafe { &mut *(lparam.0 as *mut Vec<Rc<WindowInfo>>) };
+    let info = WindowsApi::create_window_info(hwnd.0 as isize);
+    children.push(info);
+    BOOL(1) // 继续枚举
 }
