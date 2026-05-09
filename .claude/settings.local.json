@@ -2,7 +2,16 @@
   "permissions": {
     "allow": [
       "Bash(C:/Users/Administrator/.claude/skills/brainstorming/scripts/start-server.sh *)",
-      "Bash(C:/Users/Administrator/.claude/skills/brainstorming/scripts/stop-server.sh *)"
+      "Bash(C:/Users/Administrator/.claude/skills/brainstorming/scripts/stop-server.sh *)",
+      "Bash(cargo build *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "WebSearch",
+      "Bash(cargo doc *)",
+      "Bash(cargo run *)",
+      "Bash(cargo test *)",
+      "Bash(cargo check *)",
+      "Bash(cargo clippy *)"
     ]
   }
 }
