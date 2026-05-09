@@ -1,0 +1,75 @@
+<h2>界面设计更新</h2>
+<p class="subtitle">普通列表 + 树形视图对比</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">普通列表模式</div>
+    <div class="mockup-body" style="padding: 8px;">
+      <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+        <input class="mock-input" style="flex: 1; padding: 4px;" placeholder="搜索...">
+        <button class="mock-button" style="padding: 4px 8px;">📍定位</button>
+        <button class="mock-button" style="padding: 4px 8px;">🌳树形</button>
+      </div>
+      <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+        <thead>
+          <tr style="background: #f0f0f0;">
+            <th style="padding: 3px; border: 1px solid #ddd;">标题</th>
+            <th style="padding: 3px; border: 1px solid #ddd;">进程名称</th>
+            <th style="padding: 3px; border: 1px solid #ddd;">PID</th>
+            <th style="padding: 3px; border: 1px solid #ddd;">Class Name</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style="padding: 3px; border: 1px solid #ddd;">无标题 - 记事本</td><td style="padding: 3px; border: 1px solid #ddd;">notepad.exe</td><td style="padding: 3px; border: 1px solid #ddd;">1234</td><td style="padding: 3px; border: 1px solid #ddd;">Notepad</td></tr>
+          <tr><td style="padding: 3px; border: 1px solid #ddd;">Google Chrome</td><td style="padding: 3px; border: 1px solid #ddd;">chrome.exe</td><td style="padding: 3px; border: 1px solid #ddd;">5678</td><td style="padding: 3px; border: 1px solid #ddd;">Chrome_WidgetWin_1</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">树形层级模式</div>
+    <div class="mockup-body" style="padding: 8px;">
+      <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+        <input class="mock-input" style="flex: 1; padding: 4px;" placeholder="搜索...">
+        <button class="mock-button" style="padding: 4px 8px;">📍定位</button>
+        <button class="mock-button" style="padding: 4px 8px;">📋列表</button>
+      </div>
+      <div style="font-size: 11px; line-height: 1.6;">
+        <div style="padding: 2px 0;">▼ 无标题 - 记事本 <span style="color: #666;">[notepad.exe:1234 / Notepad]</span></div>
+        <div style="padding: 2px 0; padding-left: 16px;">  ├─ 编辑区 <span style="color: #666;">[Edit]</span></div>
+        <div style="padding: 2px 0; padding-left: 16px;">  └─ 状态栏 <span style="color: #666;">[msctls_statusbar32]</span></div>
+        <div style="padding: 2px 0;">▼ Google Chrome <span style="color: #666;">[chrome.exe:5678 / Chrome_WidgetWin_1]</span></div>
+        <div style="padding: 2px 0; padding-left: 16px;">  └─ 标签页容器 <span style="color: #666;">[Chrome_TabList]</span></div>
+        <div style="padding: 2px 0; padding-left: 16px;">  └─ 内容区域 <span style="color: #666;">[Chrome_RenderWidgetHost]</span></div>
+        <div style="padding: 2px 0; padding-left: 32px;">    └─ 网页内容 <span style="color: #666;">[Chrome_WidgetWin_0]</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>树形模式说明</h3>
+  <ul>
+    <li><strong>展开/折叠</strong> - 点击节点可展开或折叠子窗口</li>
+    <li><strong>信息显示</strong> - 主行显示完整信息，子节点简化显示（标题 + Class Name）</li>
+    <li><strong>搜索过滤</strong> - 搜索时自动展开匹配的节点路径</li>
+  </ul>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approve" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content">
+      <h3>确认设计</h3>
+      <p>两种模式都符合需求，开始实现</p>
+    </div>
+  </div>
+  <div class="option" data-choice="modify" onclick="toggleSelect(this)">
+    <div class="letter">✎</div>
+    <div class="content">
+      <h3>需要修改</h3>
+      <p>在终端说明需要调整的地方</p>
+    </div>
+  </div>
+</div>

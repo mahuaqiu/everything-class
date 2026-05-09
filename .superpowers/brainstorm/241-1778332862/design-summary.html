@@ -1,0 +1,74 @@
+<h2>Window Handle Finder - 设计方案</h2>
+<p class="subtitle">请确认以下设计是否符合你的需求</p>
+
+<div class="mockup">
+  <div class="mockup-header">界面预览</div>
+  <div class="mockup-body" style="padding: 10px;">
+    <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+      <input class="mock-input" style="flex: 1;" placeholder="搜索 PID / 进程名称 / 标题 / Class Name">
+      <button class="mock-button">🔍 定位</button>
+      <button class="mock-button">树形</button>
+    </div>
+    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+      <thead>
+        <tr style="background: #f0f0f0;">
+          <th style="padding: 4px; border: 1px solid #ddd;">Handle</th>
+          <th style="padding: 4px; border: 1px solid #ddd;">Class Name</th>
+          <th style="padding: 4px; border: 1px solid #ddd;">标题</th>
+          <th style="padding: 4px; border: 1px solid #ddd;">PID</th>
+          <th style="padding: 4px; border: 1px solid #ddd;">进程名称</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td style="padding: 4px; border: 1px solid #ddd;">0x000A0F</td><td style="padding: 4px; border: 1px solid #ddd;">Notepad</td><td style="padding: 4px; border: 1px solid #ddd;">无标题 - 记事本</td><td style="padding: 4px; border: 1px solid #ddd;">1234</td><td style="padding: 4px; border: 1px solid #ddd;">notepad.exe</td></tr>
+        <tr><td style="padding: 4px; border: 1px solid #ddd;">0x001B2C</td><td style="padding: 4px; border: 1px solid #ddd;">Chrome_WidgetWin_1</td><td style="padding: 4px; border: 1px solid #ddd;">Google Chrome</td><td style="padding: 4px; border: 1px solid #ddd;">5678</td><td style="padding: 4px; border: 1px solid #ddd;">chrome.exe</td></tr>
+        <tr><td style="padding: 4px; border: 1px solid #ddd;">0x002C3D</td><td style="padding: 4px; border: 1px solid #ddd;">Explorer</td><td style="padding: 4px; border: 1px solid #ddd;">D:\code</td><td style="padding: 4px; border: 1px solid #ddd;">9012</td><td style="padding: 4px; border: 1px solid #ddd;">explorer.exe</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section">
+  <h3>核心功能</h3>
+  <ul>
+    <li><strong>实时搜索</strong> - 输入即刻过滤，支持 PID / 进程名称 / 标题 / Class Name</li>
+    <li><strong>定位模式</strong> - 点击"定位"按钮，鼠标变成瞄准状态，点击目标窗口获取信息</li>
+    <li><strong>层级切换</strong> - 默认顶层窗口，点击"树形"切换查看子窗口层级</li>
+    <li><strong>进程筛选</strong> - 输入进程名称（如 notepad）列出该进程所有窗口</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>技术选型</h3>
+  <ul>
+    <li><strong>语言</strong> - Rust（高性能、内存安全）</li>
+    <li><strong>GUI框架</strong> - native-windows-gui（原生Windows控件，体积~1MB）</li>
+    <li><strong>Windows API</strong> - EnumWindows / GetClassName / GetWindowText / GetWindowThreadProcessId</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>目标指标</h3>
+  <ul>
+    <li>体积 &lt; 2MB</li>
+    <li>启动时间 &lt; 100ms</li>
+    <li>搜索响应 &lt; 50ms（千条数据）</li>
+  </ul>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approve" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content">
+      <h3>确认设计</h3>
+      <p>方案符合需求，开始实现</p>
+    </div>
+  </div>
+  <div class="option" data-choice="modify" onclick="toggleSelect(this)">
+    <div class="letter">✎</div>
+    <div class="content">
+      <h3>需要修改</h3>
+      <p>有些地方需要调整，在终端说明</p>
+    </div>
+  </div>
+</div>
