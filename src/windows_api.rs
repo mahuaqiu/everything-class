@@ -1,7 +1,6 @@
 use std::ffi::c_void;
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
-use std::rc::Rc;
 
 use crate::window_info::WindowInfo;
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
@@ -73,22 +72,17 @@ impl WindowsApi {
 
         let os_string = OsString::from_wide(&buffer[..len as usize]);
         let full_path = os_string.to_string_lossy();
-        // 提取文件名部分
-        full_path
-            .rsplit('\\')
-            .next()
-            .unwrap_or(&full_path)
-            .to_string()
+        full_path.rsplit('\\').next().unwrap_or(&full_path).to_string()
     }
 
     /// 遍历所有顶层窗口
-    pub fn enum_windows() -> Vec<Rc<WindowInfo>> {
-        let mut windows: Vec<Rc<WindowInfo>> = Vec::new();
+    pub fn enum_windows() -> Vec<WindowInfo> {
+        let mut windows: Vec<WindowInfo> = Vec::new();
 
         unsafe {
             let _ = EnumWindows(
                 Some(enum_windows_callback),
-                LPARAM(&mut windows as *mut Vec<Rc<WindowInfo>> as isize),
+                LPARAM(&mut windows as *mut Vec<WindowInfo> as isize),
             );
         }
 
@@ -96,14 +90,14 @@ impl WindowsApi {
     }
 
     /// 遍历指定窗口的子窗口
-    pub fn enum_child_windows(parent_hwnd: isize) -> Vec<Rc<WindowInfo>> {
-        let mut children: Vec<Rc<WindowInfo>> = Vec::new();
+    pub fn enum_child_windows(parent_hwnd: isize) -> Vec<WindowInfo> {
+        let mut children: Vec<WindowInfo> = Vec::new();
 
         unsafe {
             let _ = EnumChildWindows(
                 HWND(parent_hwnd as *mut c_void),
                 Some(enum_child_windows_callback),
-                LPARAM(&mut children as *mut Vec<Rc<WindowInfo>> as isize),
+                LPARAM(&mut children as *mut Vec<WindowInfo> as isize),
             );
         }
 
@@ -111,29 +105,38 @@ impl WindowsApi {
     }
 
     /// 创建 WindowInfo 对象
-    pub fn create_window_info(hwnd: isize) -> Rc<WindowInfo> {
-        Rc::new(WindowInfo::new(
+    pub fn create_window_info(hwnd: isize) -> WindowInfo {
+        WindowInfo::new(
             hwnd,
             Self::get_window_title(hwnd),
             Self::get_class_name(hwnd),
             Self::get_window_pid(hwnd),
             Self::get_process_name(Self::get_window_pid(hwnd)),
-        ))
+        )
+    }
+
+    /// 加载子窗口（延迟加载）
+    pub fn load_children(win: &WindowInfo) {
+        if win.children_loaded.get() {
+            return;
+        }
+        *win.children.borrow_mut() = Self::enum_child_windows(win.hwnd);
+        win.children_loaded.set(true);
     }
 }
 
 /// EnumWindows 回调函数
 extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
-    let windows = unsafe { &mut *(lparam.0 as *mut Vec<Rc<WindowInfo>>) };
+    let windows = unsafe { &mut *(lparam.0 as *mut Vec<WindowInfo>) };
     let info = WindowsApi::create_window_info(hwnd.0 as isize);
     windows.push(info);
-    BOOL(1) // 继续枚举
+    BOOL(1)
 }
 
 /// EnumChildWindows 回调函数
 extern "system" fn enum_child_windows_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
-    let children = unsafe { &mut *(lparam.0 as *mut Vec<Rc<WindowInfo>>) };
+    let children = unsafe { &mut *(lparam.0 as *mut Vec<WindowInfo>) };
     let info = WindowsApi::create_window_info(hwnd.0 as isize);
     children.push(info);
-    BOOL(1) // 继续枚举
+    BOOL(1)
 }

@@ -1,8 +1,7 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::cell::{Cell, RefCell};
 
 /// 窗口信息结构体
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WindowInfo {
     /// 窗口句柄
     pub hwnd: isize,
@@ -15,9 +14,9 @@ pub struct WindowInfo {
     /// 进程名称（如 notepad.exe）
     pub process_name: String,
     /// 子窗口列表（树形模式，延迟加载）
-    pub children: RefCell<Vec<Rc<WindowInfo>>>,
+    pub children: RefCell<Vec<WindowInfo>>,
     /// 子窗口是否已加载
-    pub children_loaded: RefCell<bool>,
+    pub children_loaded: Cell<bool>,
 }
 
 impl WindowInfo {
@@ -30,7 +29,7 @@ impl WindowInfo {
             pid,
             process_name,
             children: RefCell::new(Vec::new()),
-            children_loaded: RefCell::new(false),
+            children_loaded: Cell::new(false),
         }
     }
 
