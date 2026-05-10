@@ -9,11 +9,32 @@ use window_info::WindowInfo;
 use windows_api::WindowsApi;
 use arboard::Clipboard;
 
+/// 加载应用图标
+fn load_icon() -> egui::IconData {
+    // 内嵌的 PNG 图标数据
+    const ICON_DATA: &[u8] = include_bytes!("../assets/app.png");
+
+    if let Ok(image) = image::load_from_memory(ICON_DATA) {
+        let pixels = image.to_rgba8();
+        egui::IconData {
+            width: pixels.width() as u32,
+            height: pixels.height() as u32,
+            rgba: pixels.into_raw(),
+        }
+    } else {
+        egui::IconData::default()
+    }
+}
+
 fn main() {
+    // 加载图标
+    let icon = load_icon();
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1050.0, 600.0])
-            .with_title("Window Class Finder"),
+            .with_title("Window Class Finder")
+            .with_icon(icon),
         ..Default::default()
     };
 
