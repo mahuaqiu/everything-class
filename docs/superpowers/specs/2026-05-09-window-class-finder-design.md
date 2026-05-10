@@ -1,4 +1,4 @@
-# Window Handle Finder - 设计文档
+# Window Class Finder - 设计文档
 
 ## 项目概述
 

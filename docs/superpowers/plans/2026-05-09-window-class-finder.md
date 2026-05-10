@@ -1,4 +1,4 @@
-# Window Handle Finder 实现计划
+# Window Class Finder 实现计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -38,7 +38,7 @@ Cargo.toml               # 项目配置和依赖
 
 ```toml
 [package]
-name = "window-handle-finder"
+name = "window-class-finder"
 version = "0.1.0"
 edition = "2021"
 
@@ -65,7 +65,7 @@ strip = true
 
 ```rust
 fn main() {
-    println!("Window Handle Finder - Starting...");
+    println!("Window Class Finder - Starting...");
 }
 ```
 
@@ -143,7 +143,7 @@ impl WindowInfo {
 mod window_info;
 
 fn main() {
-    println!("Window Handle Finder - Starting...");
+    println!("Window Class Finder - Starting...");
 }
 ```
 
@@ -271,7 +271,7 @@ mod window_info;
 mod windows_api;
 
 fn main() {
-    println!("Window Handle Finder - Starting...");
+    println!("Window Class Finder - Starting...");
 }
 ```
 
@@ -424,7 +424,7 @@ mod windows_api;
 mod clipboard;
 
 fn main() {
-    println!("Window Handle Finder - Starting...");
+    println!("Window Class Finder - Starting...");
 }
 ```
 
@@ -531,7 +531,7 @@ mod clipboard;
 mod ui;
 
 fn main() {
-    println!("Window Handle Finder - Starting...");
+    println!("Window Class Finder - Starting...");
 }
 ```
 
@@ -764,7 +764,7 @@ use crate::window_info::WindowInfo;
 
 #[derive(Default, NwgUi)]
 pub struct MainWindow {
-    #[nwg_control(size: (500, 300), title: "Window Handle Finder")]
+    #[nwg_control(size: (500, 300), title: "Window Class Finder")]
     #[nwg_events(OnInit: [init], OnWindowClose: [close])]
     window: nwg::Window,
 
@@ -1093,7 +1093,7 @@ Expected: 体积 < 2MB
 
 检查体积：
 ```bash
-ls -lh target/release/window-handle-finder.exe
+ls -lh target/release/window-class-finder.exe
 ```
 
 - [ ] **Step 3: 性能测试**

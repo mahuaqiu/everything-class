@@ -12,13 +12,13 @@ use arboard::Clipboard;
 fn main() {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([900.0, 600.0])
-            .with_title("Window Handle Finder"),
+            .with_inner_size([1050.0, 600.0])
+            .with_title("Window Class Finder"),
         ..Default::default()
     };
 
     eframe::run_native(
-        "Window Handle Finder",
+        "Window Class Finder",
         options,
         Box::new(|cc| {
             // 设置中文字体
@@ -64,6 +64,7 @@ struct MyApp {
     locate_mode: bool,
     expanded: Vec<bool>,
     message: String,
+    locate_dragging: bool,  // 是否正在拖拽定位
 }
 
 impl MyApp {
@@ -78,12 +79,14 @@ impl MyApp {
             locate_mode: false,
             expanded: vec![false; len],
             message: String::new(),
+            locate_dragging: false,
         }
     }
 
     fn refresh(&mut self) {
         self.windows = WindowsApi::enum_windows();
         self.expanded = vec![false; self.windows.len()];
+        self.message.clear();
         self.apply_filter();
     }
 
@@ -100,26 +103,9 @@ impl MyApp {
         }
     }
 
-    fn copy_handle(hwnd: isize) {
-        let text = format!("0x{:08X}", hwnd);
-        if let Ok(mut clip) = Clipboard::new() {
-            let _ = clip.set_text(text);
-        }
-    }
-
     fn copy_class(class: &str) {
         if let Ok(mut clip) = Clipboard::new() {
             let _ = clip.set_text(class);
-        }
-    }
-
-    fn copy_full(win: &WindowInfo) {
-        let text = format!(
-            "Handle: 0x{:08X}\nTitle: {}\nClass: {}\nPID: {}\nProcess: {}",
-            win.hwnd, win.title, win.class_name, win.pid, win.process_name
-        );
-        if let Ok(mut clip) = Clipboard::new() {
-            let _ = clip.set_text(text);
         }
     }
 }
@@ -140,11 +126,16 @@ impl eframe::App for MyApp {
                     self.apply_filter();
                 }
 
-                // 定位按钮
-                if ui.button("定位").clicked() {
+                // 定位按钮 - 显示一个带 + 图标的按钮
+                let locate_text = if self.locate_mode { "⊕ 定位中..." } else { "⊕ 定位" };
+                let locate_btn = ui.button(locate_text);
+                if locate_btn.clicked() {
                     self.locate_mode = !self.locate_mode;
+                    self.locate_dragging = false;
                     if self.locate_mode {
-                        self.message = "点击目标窗口...".to_string();
+                        self.message = "按住鼠标左键拖动到目标窗口，松开后定位".to_string();
+                    } else {
+                        self.message.clear();
                     }
                 }
 
@@ -158,6 +149,13 @@ impl eframe::App for MyApp {
                 // 刷新
                 if ui.button("刷新").clicked() {
                     self.refresh();
+                }
+
+                // 重置
+                if ui.button("重置").clicked() {
+                    self.search.clear();
+                    self.message.clear();
+                    self.apply_filter();
                 }
             });
 
@@ -187,10 +185,6 @@ impl eframe::App for MyApp {
                                 }
                             }
                             ui.label(&header);
-                            if ui.small_button("复制").clicked() {
-                                Self::copy_handle(win.hwnd);
-                                self.message = format!("Handle 0x{:08X} 已复制", win.hwnd);
-                            }
                         });
 
                         // 显示子窗口
@@ -212,7 +206,7 @@ impl eframe::App for MyApp {
                         .striped(true)
                         .resizable(true)
                         .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                        .column(Column::auto().at_least(200.0).clip(true))  // 标题
+                        .column(Column::auto().at_least(200.0).at_most(400.0).clip(true))  // 标题 - 固定最大宽度
                         .column(Column::auto().at_least(120.0))   // 进程名称
                         .column(Column::auto().at_least(60.0))    // PID
                         .column(Column::remainder().at_least(200.0).clip(true)) // Class Name
@@ -227,15 +221,19 @@ impl eframe::App for MyApp {
                                 let title = if win.title.is_empty() { "<无标题>" } else { &win.title };
                                 body.row(18.0, |mut row| {
                                     row.col(|ui| {
-                                        let resp = ui.selectable_label(false, title);
-                                        if resp.clicked() {
-                                            Self::copy_handle(win.hwnd);
-                                            self.message = format!("Handle 0x{:08X} 已复制", win.hwnd);
-                                        }
+                                        // 标题列：显示文本，clip(true) 会自动添加 tooltip
+                                        ui.label(title);
                                     });
                                     row.col(|ui| { ui.label(&win.process_name); });
                                     row.col(|ui| { ui.label(win.pid.to_string()); });
-                                    row.col(|ui| { ui.label(&win.class_name); });
+                                    row.col(|ui| {
+                                        // Class Name 列：点击复制
+                                        let resp = ui.selectable_label(false, &win.class_name);
+                                        if resp.clicked() {
+                                            Self::copy_class(&win.class_name);
+                                            self.message = format!("Class Name '{}' 已复制", win.class_name);
+                                        }
+                                    });
                                 });
                             }
                         });
@@ -243,31 +241,51 @@ impl eframe::App for MyApp {
             });
         });
 
-        // 定位模式检测
+        // 定位模式检测 - SPY++ 风格
         if self.locate_mode {
             ctx.request_repaint();
+
+            // 设置十字光标
+            use windows::Win32::UI::WindowsAndMessaging::{SetCursor, LoadCursorW, IDC_CROSS};
+            use windows::Win32::Foundation::HINSTANCE;
+
+            unsafe {
+                let hcursor = LoadCursorW(HINSTANCE::default(), IDC_CROSS).unwrap();
+                SetCursor(hcursor);
+            }
+
             use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, WindowFromPoint};
+            use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
             use windows::Win32::Foundation::POINT;
 
-            let mut pt = POINT { x: 0, y: 0 };
-            unsafe { GetCursorPos(&mut pt).ok() };
-            let hwnd = unsafe { WindowFromPoint(pt) };
+            // 检测鼠标左键状态
+            let left_button_down = unsafe { GetAsyncKeyState(VK_LBUTTON.0 as i32) < 0 };
 
-            // 检查鼠标是否按下
-            let input = ctx.input(|i| i.raw.clone());
-            if input.events.iter().any(|e| matches!(e, egui::Event::PointerButton { pressed: true, .. })) {
+            // 按下时开始拖拽
+            if left_button_down && !self.locate_dragging {
+                self.locate_dragging = true;
+                self.message = "拖动到目标窗口，松开鼠标...".to_string();
+            }
+
+            // 松开时完成定位
+            if !left_button_down && self.locate_dragging {
+                let mut pt = POINT { x: 0, y: 0 };
+                unsafe { GetCursorPos(&mut pt).ok() };
+                let hwnd = unsafe { WindowFromPoint(pt) };
+
                 if !hwnd.is_invalid() {
                     let win = WindowsApi::create_window_info(hwnd.0 as isize);
 
-                    // 添加到列表顶部
-                    self.windows.insert(0, win.clone());
-                    self.filtered.insert(0, win.clone());
-                    self.expanded.insert(0, false);
+                    // 清空列表，只保留定位到的窗口
+                    self.windows = vec![win.clone()];
+                    self.filtered = vec![win.clone()];
+                    self.expanded = vec![false];
 
-                    Self::copy_handle(win.hwnd);
-                    self.message = format!("Handle 0x{:08X} 已复制", win.hwnd);
-                    self.locate_mode = false;
+                    self.message = format!("已定位：{}", win.process_name);
                 }
+
+                self.locate_mode = false;
+                self.locate_dragging = false;
             }
         }
     }

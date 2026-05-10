@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-Window Handle Finder 是一个 Windows 窗口查找工具，用于快速定位窗口 Handle、Class Name、标题、PID 和进程名称。类似 Everything 的即时搜索风格，目标用户是自动化测试和 UI 自动化工具开发者。
+Window Class Finder 是一个 Windows 窗口查找工具，用于快速定位窗口 Handle、Class Name、标题、PID 和进程名称。类似 Everything 的即时搜索风格，目标用户是自动化测试和 UI 自动化工具开发者。
 
 ## 构建与运行
 
