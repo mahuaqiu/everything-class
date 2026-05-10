@@ -15,7 +15,8 @@
       "Bash(./target/release/window-handle-finder.exe)",
       "Bash(taskkill /F /IM window-handle-finder.exe)",
       "Bash(tasklist /FI \"IMAGENAME eq explorer.exe\")",
-      "Bash(powershell *)"
+      "Bash(powershell *)",
+      "Bash(git remote *)"
     ]
   }
 }
