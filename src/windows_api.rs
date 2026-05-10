@@ -6,6 +6,20 @@ use crate::window_info::WindowInfo;
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{EnumChildWindows, EnumWindows};
 
+// 直接使用 FFI 定义 OpenProcess 和相关函数（windows crate 封装有问题）
+#[link(name = "kernel32")]
+extern "system" {
+    fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> isize;
+    fn CloseHandle(hObject: isize) -> i32;
+}
+
+#[link(name = "psapi")]
+extern "system" {
+    fn GetProcessImageFileNameW(hProcess: isize, lpImageFileName: *mut u16, nSize: u32) -> u32;
+}
+
+const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+
 /// Windows API 调用封装
 pub struct WindowsApi;
 
@@ -43,28 +57,24 @@ impl WindowsApi {
         use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
         use windows::Win32::Foundation::HWND;
 
-        unsafe { GetWindowThreadProcessId(HWND(hwnd as *mut c_void), None) }
+        let mut pid: u32 = 0;
+        unsafe {
+            GetWindowThreadProcessId(HWND(hwnd as *mut c_void), Some(&mut pid));
+        }
+        pid
     }
 
-    /// 根据PID获取进程名称
+    /// 根据PID获取进程名称（使用原始 FFI）
     pub fn get_process_name(pid: u32) -> String {
-        use windows::Win32::Foundation::CloseHandle;
-        use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_INFORMATION};
-        use windows::Win32::System::ProcessStatus::GetProcessImageFileNameW;
+        let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
 
-        let process_handle = unsafe { OpenProcess(PROCESS_QUERY_INFORMATION, false, pid) };
-        let Ok(handle) = process_handle else {
-            return "<无法访问>".to_string();
-        };
-
-        if handle.is_invalid() {
+        if handle == 0 {
             return "<无法访问>".to_string();
         }
 
         let mut buffer: [u16; 512] = [0; 512];
-        let len = unsafe { GetProcessImageFileNameW(handle, &mut buffer) };
-
-        unsafe { CloseHandle(handle).ok() };
+        let len = unsafe { GetProcessImageFileNameW(handle, buffer.as_mut_ptr(), 512) };
+        unsafe { CloseHandle(handle) };
 
         if len == 0 {
             return "<无法访问>".to_string();

@@ -1,3 +1,6 @@
+// Windows 上隐藏控制台窗口
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod window_info;
 mod windows_api;
 
@@ -9,7 +12,7 @@ use arboard::Clipboard;
 fn main() {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([600.0, 400.0])
+            .with_inner_size([900.0, 600.0])
             .with_title("Window Handle Finder"),
         ..Default::default()
     };
@@ -17,8 +20,40 @@ fn main() {
     eframe::run_native(
         "Window Handle Finder",
         options,
-        Box::new(|cc| Ok(Box::new(MyApp::new(cc)))),
+        Box::new(|cc| {
+            // 设置中文字体
+            setup_custom_fonts(&cc.egui_ctx);
+            Ok(Box::new(MyApp::new(cc)))
+        }),
     ).expect("Failed to start");
+}
+
+/// 设置支持中文的自定义字体
+fn setup_custom_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+
+    // 运行时加载系统字体（微软雅黑）
+    if let Ok(font_data) = std::fs::read("C:\\Windows\\Fonts\\msyh.ttc") {
+        fonts.font_data.insert(
+            "my_font".to_owned(),
+            egui::FontData::from_owned(font_data),
+        );
+
+        // 设置为首选字体
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(0, "my_font".to_owned());
+
+        fonts
+            .families
+            .entry(egui::FontFamily::Monospace)
+            .or_default()
+            .insert(0, "my_font".to_owned());
+
+        ctx.set_fonts(fonts);
+    }
 }
 
 struct MyApp {
@@ -177,10 +212,10 @@ impl eframe::App for MyApp {
                         .striped(true)
                         .resizable(true)
                         .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                        .column(Column::auto().at_least(160.0).clip(true))  // 标题
-                        .column(Column::auto().at_least(80.0))   // 进程名称
-                        .column(Column::auto().at_least(50.0))   // PID
-                        .column(Column::remainder().at_least(150.0).clip(true)) // Class Name
+                        .column(Column::auto().at_least(200.0).clip(true))  // 标题
+                        .column(Column::auto().at_least(120.0))   // 进程名称
+                        .column(Column::auto().at_least(60.0))    // PID
+                        .column(Column::remainder().at_least(200.0).clip(true)) // Class Name
                         .header(20.0, |mut header| {
                             header.col(|ui| { ui.strong("标题"); });
                             header.col(|ui| { ui.strong("进程名称"); });
