@@ -26,7 +26,7 @@
 
 **新增内容**：
 - 热键状态存储（内存中）
-- 口口子类化（拦截 WM_HOTKEY）
+- 窗口子类化（拦截 WM_HOTKEY）
 - 热键注册/注销
 - 按键映射函数
 - 快捷键显示和修改 UI
@@ -55,10 +55,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::Win32::UI::Input::KeyboardAndMouse::{MOD_NOREPEAT, VK_F8};
 use windows::Win32::Foundation::{HWND, WPARAM, LPARAM, LRESULT};
 
-fn setup_hotkey(ctx: &egui::Context) -> Option<HWND> {
+fn setup_hotkey(ctx: &egui::Context) -> (Option<HWND>, String, u32) {
     let handle = match ctx.window_handle() {
         Ok(h) => h,
-        Err(_) => return None,
+        Err(_) => return (None, "F8".to_string(), 0x77),
     };
     
     let raw = handle.as_raw();
@@ -74,17 +74,17 @@ fn setup_hotkey(ctx: &egui::Context) -> Option<HWND> {
             SetWindowLongPtrW(hwnd, GWLP_WNDPROC, hotkey_wndproc as usize as isize);
         }
         
-        // 注册热键
-        let result = unsafe { RegisterHotKey(hwnd, HOTKEY_ID, MOD_NOREPEAT, VK_F8.0 as u32) };
-        if !result.as_bool() {
-            // F8 被占用，尝试 F9
-            let vk_f9 = 0x78; // VK_F9
-            unsafe { RegisterHotKey(hwnd, HOTKEY_ID, MOD_NOREPEAT, vk_f9) };
+        // 注册默认热键 F8
+        let vk_f8 = 0x77;
+        let result = unsafe { RegisterHotKey(hwnd, HOTKEY_ID, MOD_NOREPEAT, vk_f8) };
+        if result.as_bool() {
+            return (Some(hwnd), "F8".to_string(), vk_f8);
         }
         
-        return Some(hwnd);
+        // F8 被占用，返回 None 表示失败，让用户手动修改
+        return (Some(hwnd), "F8(失败)".to_string(), 0);
     }
-    None
+    (None, "F8".to_string(), 0x77)
 }
 ```
 
@@ -206,10 +206,20 @@ ui.horizontal(|ui| {
                 .desired_width(40.0)
                 .hint_text("F1-F12/A-Z")
         );
+        // Enter 确认修改
         if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             if let Some(hwnd) = self.hwnd {
                 self.change_hotkey(&self.hotkey_edit_text, hwnd);
             }
+            self.hotkey_editing = false;
+        }
+        // ESC 取消编辑
+        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.hotkey_editing = false;
+            self.message.clear();
+        }
+        // 失焦取消编辑（不保存）
+        if resp.lost_focus() && !ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             self.hotkey_editing = false;
         }
     } else {
@@ -238,14 +248,19 @@ struct MyApp {
 **初始化**：
 ```rust
 fn new(cc: &eframe::CreationContext) -> Self {
-    let hwnd = setup_hotkey(&cc.egui_ctx);
+    let (hwnd, hotkey_key, hotkey_vk) = setup_hotkey(&cc.egui_ctx);
+    let mut message = String::new();
+    if hotkey_key.contains("(失败)") {
+        message = "F8 已被占用，请点击⚙修改快捷键".to_string();
+    }
     Self {
         // ... 现有字段
-        hotkey_key: "F8".to_string(),
-        hotkey_vk: 0x77, // VK_F8
+        hotkey_key,
+        hotkey_vk,
         hotkey_editing: false,
         hotkey_edit_text: String::new(),
         hwnd,
+        message,
     }
 }
 ```
@@ -271,7 +286,9 @@ fn new(cc: &eframe::CreationContext) -> Self {
 
 1. F8 触发定位：验证热键生效（程序在后台时也能触发）
 2. 修改快捷键：修改为 F9，验证新热键生效
-3. 无效输入：输入"abc"，验证提示
-4. 热键冲突：占用 F8 后启动程序，验证提示和 F9 备选
-5. 重启还原：修改快捷键后重启，验证还原为 F8
-6. 程序最小化：验证热键仍然生效
+3. 无效输入：输入"abc"，验证提示"无效快捷键（支持 F1-F12 或 A-Z）"
+4. ESC 取消：编辑框中输入后按 ESC，验证取消不保存
+5. 失焦取消：编辑框中输入后点击别处，验证取消不保存
+6. 热键冲突：占用 F8 后启动程序，验证提示"F8 已被占用，请点击⚙修改"
+7. 重启还原：修改快捷键后重启，验证还原为 F8
+8. 程序最小化：验证热键仍然生效
