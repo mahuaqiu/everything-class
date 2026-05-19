@@ -18,7 +18,8 @@
       "Bash(powershell *)",
       "Bash(git remote *)",
       "Bash(python -c \"from PIL import Image; print\\('PIL available'\\)\")",
-      "Bash(pip install *)"
+      "Bash(pip install *)",
+      "Skill(brainstorming)"
     ]
   }
 }
