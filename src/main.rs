@@ -355,7 +355,7 @@ impl eframe::App for MyApp {
                 if ui.button("重置").clicked() {
                     self.search.clear();
                     self.message.clear();
-                    self.apply_filter();
+                    self.refresh();  // 重新获取所有窗口
                 }
 
                 // 定位快捷键显示和编辑
