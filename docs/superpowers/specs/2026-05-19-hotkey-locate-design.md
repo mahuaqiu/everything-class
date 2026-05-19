@@ -26,7 +26,7 @@
 
 **新增内容**：
 - 热键状态存储（内存中）
-- 窗口子类化（拦截 WM_HOTKEY）
+- 口口子类化（拦截 WM_HOTKEY）
 - 热键注册/注销
 - 按键映射函数
 - 快捷键显示和修改 UI
@@ -38,63 +38,124 @@
 const HOTKEY_ID: u32 = 0x0001;
 ```
 
+**全局状态（用于线程间通信）**：
+```rust
+use std::sync::atomic::{AtomicBool, Ordering};
+static HOTKEY_TRIGGERED: AtomicBool = AtomicBool::new(false);
+static ORIGINAL_WNDPROC: AtomicPtr<c_void> = AtomicPtr::new(std::ptr::null_mut());
+```
+
 **获取 HWND 并子类化窗口**：
 ```rust
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use windows::Win32::UI::WindowsAndMessaging::{
-    SetWindowLongPtrW, GWLP_WNDPROC, WM_HOTKEY,
+    SetWindowLongPtrW, GetWindowLongPtrW, GWLP_WNDPROC, WM_HOTKEY,
+    CallWindowProcW, RegisterHotKey, UnregisterHotKey,
 };
+use windows::Win32::UI::Input::KeyboardAndMouse::{MOD_NOREPEAT, VK_F8};
+use windows::Win32::Foundation::{HWND, WPARAM, LPARAM, LRESULT};
 
-// 在 MyApp::new() 中，通过 CreationContext 获取 HWND
-fn setup_hotkey(cc: &eframe::CreationContext) {
-    let handle = cc.egui_ctx.window_handle().unwrap();
+fn setup_hotkey(ctx: &egui::Context) -> Option<HWND> {
+    let handle = match ctx.window_handle() {
+        Ok(h) => h,
+        Err(_) => return None,
+    };
+    
     let raw = handle.as_raw();
     if let RawWindowHandle::Win32(win32) = raw {
         let hwnd = HWND(win32.hwnd as *mut c_void);
-        // 子类化窗口过程，保存原始 WNDPROC
-        let original_wndproc = unsafe {
-            SetWindowLongPtrW(hwnd, GWLP_WNDPROC, Some(hotkey_wndproc) as *mut c_void)
-        };
+        
+        // 保存原始窗口过程
+        let original = unsafe { GetWindowLongPtrW(hwnd, GWLP_WNDPROC) };
+        ORIGINAL_WNDPROC.store(original as *mut c_void, Ordering::SeqCst);
+        
+        // 子类化窗口
+        unsafe {
+            SetWindowLongPtrW(hwnd, GWLP_WNDPROC, hotkey_wndproc as usize as isize);
+        }
+        
         // 注册热键
-        RegisterHotKey(hwnd, HOTKEY_ID, MOD_NOREPEAT, VK_F8);
+        let result = unsafe { RegisterHotKey(hwnd, HOTKEY_ID, MOD_NOREPEAT, VK_F8.0 as u32) };
+        if !result.as_bool() {
+            // F8 被占用，尝试 F9
+            let vk_f9 = 0x78; // VK_F9
+            unsafe { RegisterHotKey(hwnd, HOTKEY_ID, MOD_NOREPEAT, vk_f9) };
+        }
+        
+        return Some(hwnd);
     }
+    None
 }
 ```
 
-**自定义窗口过程（拦截 WM_HOTKEY）**：
+**自定义窗口过程**：
 ```rust
-static mut HOTKEY_TRIGGERED: bool = false;
-static mut ORIGINAL_WNDPROC: isize = 0;
-
 extern "system" fn hotkey_wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
-    if msg == WM_HOTKEY && wparam.0 == HOTKEY_ID as usize {
-        unsafe { HOTKEY_TRIGGERED = true; }
-        return LRESULT(0);
+    if msg == WM_HOTKEY {
+        let hotkey_id = wparam.0 as u32;
+        if hotkey_id == HOTKEY_ID {
+            HOTKEY_TRIGGERED.store(true, Ordering::SeqCst);
+            return LRESULT(0);
+        }
     }
+    
     // 调用原始窗口过程
+    let original_ptr = ORIGINAL_WNDPROC.load(Ordering::SeqCst);
     unsafe {
-        CallWindowProcW(HWND(ORIGINAL_WNDPROC as *mut c_void), hwnd, msg, wparam, lparam)
+        CallWindowProcW(
+            Some(std::mem::transmute::<*mut c_void, isize>(original_ptr)),
+            hwnd,
+            msg,
+            wparam,
+            lparam,
+        )
     }
-}
-```
-
-**在 update() 中检测触发**：
-```rust
-// 每帧检测热键触发标志
-if unsafe { HOTKEY_TRIGGERED } {
-    unsafe { HOTKEY_TRIGGERED = false; }
-    self.locate_mode = true;
-    self.message = "按住鼠标左键或右键拖动到目标窗口，松开后定位".to_string();
 }
 ```
 
 **按键字符串到 VK 码映射**：
 ```rust
 fn parse_hotkey(key: &str) -> Option<u32> {
-    match key.to_uppercase().as_str() {
-        "F1" => Some(0x70), "F2" => Some(0x71), ..., "F12" => Some(0x7B),
-        "A" => Some(0x41), ..., "Z" => Some(0x5A),
-        _ => None,
+    let upper = key.to_uppercase();
+    // F1-F12: VK_F1 = 0x70, ..., VK_F12 = 0x7B
+    if upper.starts_with('F') {
+        let num: u32 = upper[1..].parse().ok()?;
+        if num >= 1 && num <= 12 {
+            return Some(0x70 + num - 1);
+        }
+    }
+    // A-Z: 'A' = 0x41, ..., 'Z' = 0x5A
+    if upper.len() == 1 {
+        let c = upper.chars().next()?;
+        if c >= 'A' && c <= 'Z' {
+            return Some(c as u32);
+        }
+    }
+    None
+}
+
+fn vk_to_string(vk: u32) -> String {
+    // F1-F12
+    if vk >= 0x70 && vk <= 0x7B {
+        return format!("F{}", vk - 0x70 + 1);
+    }
+    // A-Z
+    if vk >= 0x41 && vk <= 0x5A {
+        return ((vk as u8) as char).to_string();
+    }
+    "F8".to_string() // 默认
+}
+```
+
+**在 update() 中检测触发**：
+```rust
+// 每帧检测热键触发标志
+if HOTKEY_TRIGGERED.load(Ordering::SeqCst) {
+    HOTKEY_TRIGGERED.store(false, Ordering::SeqCst);
+    if !self.locate_mode {
+        self.locate_mode = true;
+        self.locate_dragging = false;
+        self.message = "按住鼠标左键或右键拖动到目标窗口，松开后定位".to_string();
     }
 }
 ```
@@ -102,22 +163,28 @@ fn parse_hotkey(key: &str) -> Option<u32> {
 **修改快捷键逻辑**：
 ```rust
 fn change_hotkey(&mut self, new_key: &str, hwnd: HWND) {
-    // 注销旧热键
-    UnregisterHotKey(hwnd, HOTKEY_ID);
-    
-    // 解析新按键
-    let vk = parse_hotkey(new_key);
-    if let Some(vk) = vk {
-        if RegisterHotKey(hwnd, HOTKEY_ID, MOD_NOREPEAT, vk).as_bool() {
-            self.hotkey_key = new_key.to_uppercase();
-            self.message.clear();
-        } else {
-            self.message = "快捷键注册失败（可能已被占用）".to_string();
-            // 恢复默认
-            RegisterHotKey(hwnd, HOTKEY_ID, MOD_NOREPEAT, VK_F8);
+    let vk = match parse_hotkey(new_key) {
+        Some(v) => v,
+        None => {
+            self.message = "无效快捷键（支持 F1-F12 或 A-Z）".to_string();
+            return;
         }
+    };
+    
+    // 注销旧热键
+    unsafe { UnregisterHotKey(hwnd, HOTKEY_ID) };
+    
+    // 注册新热键
+    let success = unsafe { RegisterHotKey(hwnd, HOTKEY_ID, MOD_NOREPEAT, vk).as_bool() };
+    
+    if success {
+        self.hotkey_key = vk_to_string(vk);
+        self.hotkey_vk = vk;
+        self.message.clear();
     } else {
-        self.message = "无效快捷键（支持 F1-F12 或 A-Z）".to_string();
+        self.message = format!("快捷键 {} 注册失败（已被占用）", new_key);
+        // 尝试恢复之前的热键
+        unsafe { RegisterHotKey(hwnd, HOTKEY_ID, MOD_NOREPEAT, self.hotkey_vk) };
     }
 }
 ```
@@ -134,15 +201,18 @@ fn change_hotkey(&mut self, new_key: &str, hwnd: HWND) {
 ui.horizontal(|ui| {
     ui.label("快捷键:");
     if self.hotkey_editing {
-        // 显示编辑框
-        let resp = ui.add(egui::TextEdit::singleline(&mut self.hotkey_edit_text).desired_width(40.0));
-        if resp.lost_focus() {
-            // 失去焦点时应用更改
-            self.change_hotkey(&self.hotkey_edit_text, hwnd);
+        let resp = ui.add(
+            egui::TextEdit::singleline(&mut self.hotkey_edit_text)
+                .desired_width(40.0)
+                .hint_text("F1-F12/A-Z")
+        );
+        if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            if let Some(hwnd) = self.hwnd {
+                self.change_hotkey(&self.hotkey_edit_text, hwnd);
+            }
             self.hotkey_editing = false;
         }
     } else {
-        // 显示当前快捷键 + 修改按钮
         ui.label(&self.hotkey_key);
         if ui.button("⚙").clicked() {
             self.hotkey_editing = true;
@@ -165,25 +235,43 @@ struct MyApp {
 }
 ```
 
+**初始化**：
+```rust
+fn new(cc: &eframe::CreationContext) -> Self {
+    let hwnd = setup_hotkey(&cc.egui_ctx);
+    Self {
+        // ... 现有字段
+        hotkey_key: "F8".to_string(),
+        hotkey_vk: 0x77, // VK_F8
+        hotkey_editing: false,
+        hotkey_edit_text: String::new(),
+        hwnd,
+    }
+}
+```
+
 ### 实现步骤
 
 1. 新增 `MyApp` 字段
 2. 新增常量 `HOTKEY_ID`
-3. 新增全局变量 `HOTKEY_TRIGGERED`、`ORIGINAL_WNDPROC`
-4. 新增函数 `parse_hotkey`、`hotkey_wndproc`
-5. 在 `MyApp::new()` 中：获取 HWND、子类化窗口、注册热键
-6. 在 `update()` 中：检测热键触发、添加 UI
-7. 新增方法 `change_hotkey`
+3. 新增全局原子变量 `HOTKEY_TRIGGERED`、`ORIGINAL_WNDPROC`
+4. 新增函数 `parse_hotkey`、`vk_to_string`、`hotkey_wndproc`、`setup_hotkey`、`change_hotkey`
+5. 在 `MyApp::new()` 中调用 `setup_hotkey`
+6. 在 `update()` 中检测热键触发、添加 UI
+7. 程序退出时自动清理（窗口销毁时热键自动注销）
 
 ### 潜在问题
 
-1. **热键冲突**：注册失败时界面提示"快捷键注册失败"，并恢复默认 F8
+1. **热键冲突**：注册失败时界面提示，并尝试恢复之前的热键
 2. **无效输入**：输入非 F1-F12/A-Z 时提示"无效快捷键"
-3. **程序退出**：eframe 正常退出时会自动清理窗口，热键随之注销
+3. **程序退出**：窗口销毁时热键自动注销，无需手动清理
+4. **最小化状态**：热键仍然生效，因为 RegisterHotKey 是全局的
 
 ### 测试要点
 
 1. F8 触发定位：验证热键生效（程序在后台时也能触发）
 2. 修改快捷键：修改为 F9，验证新热键生效
 3. 无效输入：输入"abc"，验证提示
-4. 重启还原：修改快捷键后重启，验证还原为 F8
+4. 热键冲突：占用 F8 后启动程序，验证提示和 F9 备选
+5. 重启还原：修改快捷键后重启，验证还原为 F8
+6. 程序最小化：验证热键仍然生效
