@@ -1,5 +1,5 @@
-// Windows 上隐藏控制台窗口
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// 移除静态隐藏控制台，改为动态控制
+// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod window_info;
 mod windows_api;
@@ -41,6 +41,13 @@ fn main() {
     }
 
     // 无参数，启动 GUI
+    // 释放控制台，避免显示黑窗口
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn FreeConsole() -> i32;
+    }
+    unsafe { FreeConsole() };
+
     // 加载图标
     let icon = load_icon();
 
