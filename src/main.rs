@@ -546,16 +546,35 @@ fn parse_class_arg() -> Option<String> {
     None
 }
 
-/// 查询窗口并输出 JSON
+/// 查询窗口并输出 JSON（递归搜索所有窗口，包括子窗口）
 fn query_and_output(class_name: &str) {
     let windows = WindowsApi::enum_windows();
-    let found = windows.iter().find(|w| w.class_name == class_name);
+
+    // 递归搜索
+    let found = find_window_by_class(&windows, class_name);
 
     if let Some(win) = found {
-        println!("{}", format_json(win));
+        println!("{}", format_json(&win));
     } else {
         println!("null");
     }
+}
+
+/// 递归查找指定类名的窗口（包括子窗口）
+fn find_window_by_class(windows: &[WindowInfo], class_name: &str) -> Option<WindowInfo> {
+    // 先检查当前层级
+    for win in windows {
+        if win.class_name == class_name {
+            return Some(win.clone());
+        }
+
+        // 加载子窗口并递归检查
+        WindowsApi::load_children(win);
+        if let Some(found) = find_window_by_class(win.children.borrow().as_slice(), class_name) {
+            return Some(found);
+        }
+    }
+    None
 }
 
 /// 手动构建 JSON 输出
