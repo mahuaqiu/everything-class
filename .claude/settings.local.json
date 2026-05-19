@@ -29,7 +29,10 @@
       "PowerShell(.\\\\target\\\\debug\\\\window-class-finder.exe --class=\"NotExistClass\")",
       "PowerShell(.\\\\target\\\\debug\\\\window-class-finder.exe --class Notepad)",
       "PowerShell(Stop-Process *)",
-      "PowerShell(Start-Process notepad -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; .\\\\target\\\\release\\\\window-class-finder.exe --class=\"Notepad\")"
+      "PowerShell(Start-Process notepad -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; .\\\\target\\\\release\\\\window-class-finder.exe --class=\"Notepad\")",
+      "PowerShell(.\\\\target\\\\release\\\\window-class-finder.exe --class=\"Chrome_RenderWidgetHostHWND\")",
+      "PowerShell(.\\\\target\\\\release\\\\window-class-finder.exe --class=\"Chrome_RenderWidgetHostHWND\" --process=\"GitHubDesktop.exe\")",
+      "PowerShell(.\\\\target\\\\release\\\\window-class-finder.exe --class=\"Notepad\" --process=\"NotExist.exe\")"
     ]
   }
 }
