@@ -35,8 +35,8 @@ fn load_icon() -> egui::IconData {
 
 fn main() {
     // 命令行参数解析：有 --class 参数时执行查询并退出
-    if let Some(class_name) = parse_class_arg() {
-        query_and_output(&class_name);
+    if let Some((class_name, process_name)) = parse_args() {
+        query_and_output(&class_name, process_name.as_deref());
         return;
     }
 
@@ -522,59 +522,85 @@ impl eframe::App for MyApp {
     }
 }
 
-/// 解析 --class 命令行参数
-fn parse_class_arg() -> Option<String> {
+/// 解析命令行参数：--class 和 --process
+fn parse_args() -> Option<(String, Option<String>)> {
     let args: Vec<String> = std::env::args().collect();
+
+    let mut class_name: Option<String> = None;
+    let mut process_name: Option<String> = None;
 
     for i in 1..args.len() {
         // --class="xxxx" 形式
         if args[i].starts_with("--class=") {
-            let class_name = args[i].split('=').nth(1).unwrap_or("");
-            if !class_name.is_empty() {
-                return Some(class_name.to_string());
+            let name = args[i].split('=').nth(1).unwrap_or("");
+            if !name.is_empty() {
+                class_name = Some(name.to_string());
             }
         }
         // --class xxxx 形式
         if args[i] == "--class" && i + 1 < args.len() {
-            let class_name = &args[i + 1];
-            if !class_name.is_empty() {
-                return Some(class_name.clone());
+            let name = &args[i + 1];
+            if !name.is_empty() {
+                class_name = Some(name.clone());
+            }
+        }
+        // --process="xxxx" 形式
+        if args[i].starts_with("--process=") {
+            let name = args[i].split('=').nth(1).unwrap_or("");
+            if !name.is_empty() {
+                process_name = Some(name.to_string());
+            }
+        }
+        // --process xxxx 形式
+        if args[i] == "--process" && i + 1 < args.len() {
+            let name = &args[i + 1];
+            if !name.is_empty() {
+                process_name = Some(name.clone());
             }
         }
     }
 
-    None
+    // --class 是必需参数
+    class_name.map(|c| (c, process_name))
 }
 
 /// 查询窗口并输出 JSON（递归搜索所有窗口，包括子窗口）
-fn query_and_output(class_name: &str) {
+fn query_and_output(class_name: &str, process_name: Option<&str>) {
     let windows = WindowsApi::enum_windows();
 
-    // 递归搜索
-    let found = find_window_by_class(&windows, class_name);
+    // 递归搜索所有匹配的窗口
+    let found = find_all_windows_by_class(&windows, class_name);
 
-    if let Some(win) = found {
-        println!("{}", format_json(&win));
+    if let Some(process) = process_name {
+        // 有进程名过滤，返回单个窗口
+        let filtered = found.iter().find(|w| w.process_name == process);
+        if let Some(win) = filtered {
+            println!("{}", format_json(win));
+        } else {
+            println!("null");
+        }
     } else {
-        println!("null");
+        // 无进程名过滤，返回所有匹配窗口的数组
+        println!("{}", format_json_array(&found));
     }
 }
 
-/// 递归查找指定类名的窗口（包括子窗口）
-fn find_window_by_class(windows: &[WindowInfo], class_name: &str) -> Option<WindowInfo> {
-    // 先检查当前层级
+/// 递归查找所有指定类名的窗口（包括子窗口）
+fn find_all_windows_by_class(windows: &[WindowInfo], class_name: &str) -> Vec<WindowInfo> {
+    let mut result = Vec::new();
+
     for win in windows {
         if win.class_name == class_name {
-            return Some(win.clone());
+            result.push(win.clone());
         }
 
         // 加载子窗口并递归检查
         WindowsApi::load_children(win);
-        if let Some(found) = find_window_by_class(win.children.borrow().as_slice(), class_name) {
-            return Some(found);
-        }
+        let children = find_all_windows_by_class(win.children.borrow().as_slice(), class_name);
+        result.extend(children);
     }
-    None
+
+    result
 }
 
 /// 手动构建 JSON 输出
@@ -587,6 +613,16 @@ fn format_json(win: &WindowInfo) -> String {
         win.pid,
         escape_json(&win.process_name)
     )
+}
+
+/// 手动构建 JSON 数组输出
+fn format_json_array(windows: &[WindowInfo]) -> String {
+    if windows.is_empty() {
+        return "[]".to_string();
+    }
+
+    let items: Vec<String> = windows.iter().map(format_json).collect();
+    format!("[{}]", items.join(", "))
 }
 
 /// JSON 字符串转义
