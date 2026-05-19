@@ -28,7 +28,8 @@
       "PowerShell(Start-Process notepad; Start-Sleep -Seconds 1; .\\\\target\\\\debug\\\\window-class-finder.exe --class=\"Notepad\")",
       "PowerShell(.\\\\target\\\\debug\\\\window-class-finder.exe --class=\"NotExistClass\")",
       "PowerShell(.\\\\target\\\\debug\\\\window-class-finder.exe --class Notepad)",
-      "PowerShell(Stop-Process *)"
+      "PowerShell(Stop-Process *)",
+      "PowerShell(Start-Process notepad -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; .\\\\target\\\\release\\\\window-class-finder.exe --class=\"Notepad\")"
     ]
   }
 }
