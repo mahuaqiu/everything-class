@@ -34,6 +34,13 @@ fn load_icon() -> egui::IconData {
 }
 
 fn main() {
+    // 命令行参数解析：有 --class 参数时执行查询并退出
+    if let Some(class_name) = parse_class_arg() {
+        query_and_output(&class_name);
+        return;
+    }
+
+    // 无参数，启动 GUI
     // 加载图标
     let icon = load_icon();
 
@@ -506,4 +513,61 @@ impl eframe::App for MyApp {
             }
         }
     }
+}
+
+/// 解析 --class 命令行参数
+fn parse_class_arg() -> Option<String> {
+    let args: Vec<String> = std::env::args().collect();
+
+    for i in 1..args.len() {
+        // --class="xxxx" 形式
+        if args[i].starts_with("--class=") {
+            let class_name = args[i].split('=').nth(1).unwrap_or("");
+            if !class_name.is_empty() {
+                return Some(class_name.to_string());
+            }
+        }
+        // --class xxxx 形式
+        if args[i] == "--class" && i + 1 < args.len() {
+            let class_name = &args[i + 1];
+            if !class_name.is_empty() {
+                return Some(class_name.clone());
+            }
+        }
+    }
+
+    None
+}
+
+/// 查询窗口并输出 JSON
+fn query_and_output(class_name: &str) {
+    let windows = WindowsApi::enum_windows();
+    let found = windows.iter().find(|w| w.class_name == class_name);
+
+    if let Some(win) = found {
+        println!("{}", format_json(win));
+    } else {
+        println!("null");
+    }
+}
+
+/// 手动构建 JSON 输出
+fn format_json(win: &WindowInfo) -> String {
+    format!(
+        "{{\"hwnd\": {}, \"title\": \"{}\", \"class_name\": \"{}\", \"pid\": {}, \"process_name\": \"{}\"}}",
+        win.hwnd,
+        escape_json(&win.title),
+        escape_json(&win.class_name),
+        win.pid,
+        escape_json(&win.process_name)
+    )
+}
+
+/// JSON 字符串转义
+fn escape_json(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
 }
