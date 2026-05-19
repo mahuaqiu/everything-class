@@ -20,19 +20,32 @@
 
 ### 实现细节
 
-1. 导入新增 `VK_RBUTTON`
-2. 检测左键和右键状态
-3. 使用 `any_button_down` 替代原有的 `left_button_down`
-4. 更新提示文案
+**改动点清单**（均在 `src/main.rs`）：
+
+1. **第 279 行**：修改现有导入，添加 `VK_RBUTTON`
+2. **第 283 行**：添加右键状态检测变量
+3. **第 286 行**：按下条件改为 `any_button_down`
+4. **第 292 行**：松开条件改为 `!any_button_down`
+5. **第 157 行**：更新提示文案
 
 ```rust
-// 新增导入
+// 第 279 行：修改导入（添加 VK_RBUTTON）
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON};
 
-// 双键检测
+// 第 283-285 行：双键检测
 let left_button_down = unsafe { GetAsyncKeyState(VK_LBUTTON.0 as i32) < 0 };
 let right_button_down = unsafe { GetAsyncKeyState(VK_RBUTTON.0 as i32) < 0 };
 let any_button_down = left_button_down || right_button_down;
+
+// 第 286-288 行：按下判断
+if any_button_down && !self.locate_dragging {
+    ...
+}
+
+// 第 292-309 行：松开判断
+if !any_button_down && self.locate_dragging {
+    ...
+}
 ```
 
 ### 逻辑流程
