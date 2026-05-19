@@ -4,6 +4,13 @@
 mod window_info;
 mod windows_api;
 
+use std::ffi::c_void;
+use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
+
+const HOTKEY_ID: u32 = 0x0001;
+static HOTKEY_TRIGGERED: AtomicBool = AtomicBool::new(false);
+static ORIGINAL_WNDPROC: AtomicPtr<c_void> = AtomicPtr::new(std::ptr::null_mut());
+
 use eframe::egui;
 use window_info::WindowInfo;
 use windows_api::WindowsApi;
@@ -77,6 +84,92 @@ fn setup_custom_fonts(ctx: &egui::Context) {
     }
 }
 
+/// 解析快捷键字符串为 VK 码
+fn parse_hotkey(key: &str) -> Option<u32> {
+    let upper = key.to_uppercase();
+    // F1-F12: VK_F1 = 0x70, ..., VK_F12 = 0x7B
+    if upper.starts_with('F') {
+        if upper.len() > 1 {
+            let num: u32 = upper[1..].parse().ok()?;
+            if num >= 1 && num <= 12 {
+                return Some(0x70 + num - 1);
+            }
+        }
+    }
+    // A-Z: 'A' = 0x41, ..., 'Z' = 0x5A
+    if upper.len() == 1 {
+        let c = upper.chars().next()?;
+        if c >= 'A' && c <= 'Z' {
+            return Some(c as u32);
+        }
+    }
+    None
+}
+
+/// VK 码转字符串
+fn vk_to_string(vk: u32) -> String {
+    // F1-F12
+    if vk >= 0x70 && vk <= 0x7B {
+        return format!("F{}", vk - 0x70 + 1);
+    }
+    // A-Z
+    if vk >= 0x41 && vk <= 0x5A {
+        return ((vk as u8) as char).to_string();
+    }
+    "F8".to_string()
+}
+
+// 使用 FFI 直接定义热键相关函数
+#[link(name = "user32")]
+extern "system" {
+    fn RegisterHotKey(hWnd: isize, id: i32, fsModifiers: u32, vk: u32) -> i32;
+    fn UnregisterHotKey(hWnd: isize, id: i32) -> i32;
+    fn SetWindowLongPtrW(hWnd: isize, nIndex: i32, dwNewLong: isize) -> isize;
+    fn GetWindowLongPtrW(hWnd: isize, nIndex: i32) -> isize;
+    fn CallWindowProcW(lpPrevWndFunc: isize, hWnd: isize, Msg: u32, wParam: usize, lParam: isize) -> isize;
+}
+
+const GWLP_WNDPROC: i32 = -4;
+const WM_HOTKEY: u32 = 0x0312;
+const MOD_NOREPEAT: u32 = 0x4000;
+
+/// 自定义窗口过程（拦截 WM_HOTKEY）
+extern "system" fn hotkey_wndproc(hwnd: isize, msg: u32, wparam: usize, lparam: isize) -> isize {
+    if msg == WM_HOTKEY {
+        let hotkey_id = wparam as u32;
+        if hotkey_id == HOTKEY_ID {
+            HOTKEY_TRIGGERED.store(true, Ordering::SeqCst);
+            return 0;
+        }
+    }
+
+    // 调用原始窗口过程
+    let original_ptr = ORIGINAL_WNDPROC.load(Ordering::SeqCst) as isize;
+    unsafe { CallWindowProcW(original_ptr, hwnd, msg, wparam, lparam) }
+}
+
+/// 设置热键（子类化窗口 + 注册热键）
+fn setup_hotkey(hwnd: isize) -> (String, u32) {
+    // 保存原始窗口过程
+    let original = unsafe { GetWindowLongPtrW(hwnd, GWLP_WNDPROC) };
+    ORIGINAL_WNDPROC.store(original as *mut c_void, Ordering::SeqCst);
+
+    // 子类化窗口
+    unsafe {
+        SetWindowLongPtrW(hwnd, GWLP_WNDPROC, hotkey_wndproc as *const () as isize);
+    }
+
+    // 注册默认热键 F8
+    let vk_f8 = 0x77;
+    let result = unsafe { RegisterHotKey(hwnd, HOTKEY_ID as i32, MOD_NOREPEAT, vk_f8) };
+    if result != 0 {
+        return ("F8".to_string(), vk_f8);
+    }
+
+    // F8 被占用
+    ("F8(失败)".to_string(), 0)
+}
+
 struct MyApp {
     windows: Vec<WindowInfo>,
     filtered: Vec<WindowInfo>,
@@ -86,6 +179,13 @@ struct MyApp {
     expanded: Vec<bool>,
     message: String,
     locate_dragging: bool,  // 是否正在拖拽定位
+    // 热键相关字段
+    hotkey_key: String,
+    hotkey_vk: u32,
+    hotkey_editing: bool,
+    hotkey_edit_text: String,
+    hwnd: Option<isize>,
+    hotkey_setup_done: bool,  // 是否已设置热键
 }
 
 impl MyApp {
@@ -101,6 +201,12 @@ impl MyApp {
             expanded: vec![false; len],
             message: String::new(),
             locate_dragging: false,
+            hotkey_key: "F8".to_string(),
+            hotkey_vk: 0x77,
+            hotkey_editing: false,
+            hotkey_edit_text: String::new(),
+            hwnd: None,
+            hotkey_setup_done: false,
         }
     }
 
@@ -129,10 +235,69 @@ impl MyApp {
             let _ = clip.set_text(class);
         }
     }
+
+    fn change_hotkey(&mut self, new_key: &str) {
+        if let Some(hwnd) = self.hwnd {
+            let vk = match parse_hotkey(new_key) {
+                Some(v) => v,
+                None => {
+                    self.message = "无效快捷键（支持 F1-F12 或 A-Z）".to_string();
+                    return;
+                }
+            };
+
+            // 注销旧热键
+            unsafe { UnregisterHotKey(hwnd, HOTKEY_ID as i32) };
+
+            // 注册新热键
+            let success = unsafe { RegisterHotKey(hwnd, HOTKEY_ID as i32, MOD_NOREPEAT, vk) } != 0;
+
+            if success {
+                self.hotkey_key = vk_to_string(vk);
+                self.hotkey_vk = vk;
+                self.message.clear();
+            } else {
+                self.message = format!("快捷键 {} 注册失败（已被占用）", new_key);
+                // 尝试恢复之前的热键
+                if self.hotkey_vk > 0 {
+                    unsafe { RegisterHotKey(hwnd, HOTKEY_ID as i32, MOD_NOREPEAT, self.hotkey_vk) };
+                }
+            }
+        }
+    }
 }
 
 impl eframe::App for MyApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        // 第一帧设置热键
+        if !self.hotkey_setup_done {
+            use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+            if let Ok(handle) = frame.window_handle() {
+                let raw = handle.as_raw();
+                if let RawWindowHandle::Win32(win32) = raw {
+                    let hwnd = win32.hwnd.get() as isize;
+                    self.hwnd = Some(hwnd);
+                    let (hotkey_key, hotkey_vk) = setup_hotkey(hwnd);
+                    self.hotkey_key = hotkey_key;
+                    self.hotkey_vk = hotkey_vk;
+                    if self.hotkey_key.contains("(失败)") {
+                        self.message = "F8 已被占用，请点击⚙修改快捷键".to_string();
+                    }
+                }
+            }
+            self.hotkey_setup_done = true;
+        }
+
+        // 检测热键触发
+        if HOTKEY_TRIGGERED.load(Ordering::SeqCst) {
+            HOTKEY_TRIGGERED.store(false, Ordering::SeqCst);
+            if !self.locate_mode {
+                self.locate_mode = true;
+                self.locate_dragging = false;
+                self.message = "按住鼠标左键或右键拖动到目标窗口，松开后定位".to_string();
+            }
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| {
             // 顶部工具栏
             ui.horizontal(|ui| {
@@ -154,7 +319,7 @@ impl eframe::App for MyApp {
                     self.locate_mode = !self.locate_mode;
                     self.locate_dragging = false;
                     if self.locate_mode {
-                        self.message = "按住鼠标左键拖动到目标窗口，松开后定位".to_string();
+                        self.message = "按住鼠标左键或右键拖动到目标窗口，松开后定位".to_string();
                     } else {
                         self.message.clear();
                     }
@@ -178,6 +343,35 @@ impl eframe::App for MyApp {
                     self.message.clear();
                     self.apply_filter();
                 }
+
+                // 定位快捷键显示和编辑
+                ui.horizontal(|ui| {
+                    ui.label("定位快捷键:");
+                    if self.hotkey_editing {
+                        let resp = ui.add(
+                            egui::TextEdit::singleline(&mut self.hotkey_edit_text)
+                                .desired_width(40.0)
+                                .hint_text("F1-F12/A-Z")
+                        );
+                        // Enter 确认
+                        if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                            let key = self.hotkey_edit_text.clone();
+                            self.change_hotkey(&key);
+                            self.hotkey_editing = false;
+                        }
+                        // ESC 取消
+                        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                            self.hotkey_editing = false;
+                            self.message.clear();
+                        }
+                    } else {
+                        ui.label(&self.hotkey_key);
+                        if ui.button("⚙").clicked() {
+                            self.hotkey_editing = true;
+                            self.hotkey_edit_text = self.hotkey_key.clone();
+                        }
+                    }
+                });
             });
 
             ui.separator();
@@ -276,20 +470,22 @@ impl eframe::App for MyApp {
             }
 
             use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, WindowFromPoint};
-            use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
+            use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON};
             use windows::Win32::Foundation::POINT;
 
             // 检测鼠标左键状态
             let left_button_down = unsafe { GetAsyncKeyState(VK_LBUTTON.0 as i32) < 0 };
+            let right_button_down = unsafe { GetAsyncKeyState(VK_RBUTTON.0 as i32) < 0 };
+            let any_button_down = left_button_down || right_button_down;
 
             // 按下时开始拖拽
-            if left_button_down && !self.locate_dragging {
+            if any_button_down && !self.locate_dragging {
                 self.locate_dragging = true;
                 self.message = "拖动到目标窗口，松开鼠标...".to_string();
             }
 
             // 松开时完成定位
-            if !left_button_down && self.locate_dragging {
+            if !any_button_down && self.locate_dragging {
                 let mut pt = POINT { x: 0, y: 0 };
                 unsafe { GetCursorPos(&mut pt).ok() };
                 let hwnd = unsafe { WindowFromPoint(pt) };

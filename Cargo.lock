@@ -4046,6 +4046,7 @@ dependencies = [
  "egui",
  "egui_extras",
  "image",
+ "raw-window-handle",
  "windows 0.58.0",
  "winres",
 ]
