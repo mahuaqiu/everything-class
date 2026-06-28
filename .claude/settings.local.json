@@ -32,7 +32,21 @@
       "PowerShell(Start-Process notepad -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; .\\\\target\\\\release\\\\window-class-finder.exe --class=\"Notepad\")",
       "PowerShell(.\\\\target\\\\release\\\\window-class-finder.exe --class=\"Chrome_RenderWidgetHostHWND\")",
       "PowerShell(.\\\\target\\\\release\\\\window-class-finder.exe --class=\"Chrome_RenderWidgetHostHWND\" --process=\"GitHubDesktop.exe\")",
-      "PowerShell(.\\\\target\\\\release\\\\window-class-finder.exe --class=\"Notepad\" --process=\"NotExist.exe\")"
+      "PowerShell(.\\\\target\\\\release\\\\window-class-finder.exe --class=\"Notepad\" --process=\"NotExist.exe\")",
+      "Bash(taskkill /IM window-class-finder.exe /F)",
+      "Bash(cargo bloat *)",
+      "Bash(cargo install *)",
+      "Bash(cargo tree *)",
+      "Bash(where upx *)",
+      "Bash(cargo search *)",
+      "Bash(cargo clean *)",
+      "Bash(dumpbin /SECTION:.rdata window-class-finder.exe)",
+      "Bash(D:/code/everything-class/target/release/window-class-finder.exe *)",
+      "PowerShell(Start-Process notepad; Start-Sleep -Seconds 2; D:\\\\code\\\\everything-class\\\\target\\\\release\\\\window-class-finder.exe --class=Edit --title=无标题)",
+      "PowerShell(Start-Process notepad; Start-Sleep -Seconds 2; D:\\\\code\\\\everything-class\\\\target\\\\release\\\\window-class-finder.exe --class=Notepad)",
+      "PowerShell(D:\\\\code\\\\everything-class\\\\target\\\\release\\\\window-class-finder.exe --class=Notepad --title=无标题)",
+      "PowerShell(D:\\\\code\\\\everything-class\\\\target\\\\release\\\\window-class-finder.exe --class=Notepad --process=Notepad.exe)",
+      "PowerShell(D:\\\\code\\\\everything-class\\\\target\\\\release\\\\window-class-finder.exe --class=Notepad --process=Notepad.exe --title=game)"
     ]
   }
 }
