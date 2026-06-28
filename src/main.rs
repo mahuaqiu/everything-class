@@ -35,8 +35,8 @@ fn load_icon() -> egui::IconData {
 
 fn main() {
     // 命令行参数解析：有 --class 参数时执行查询并退出
-    if let Some((class_name, process_name)) = parse_args() {
-        query_and_output(&class_name, process_name.as_deref());
+    if let Some((class_name, process_name, title_name)) = parse_args() {
+        query_and_output(&class_name, process_name.as_deref(), title_name.as_deref());
         return;
     }
 
@@ -522,12 +522,13 @@ impl eframe::App for MyApp {
     }
 }
 
-/// 解析命令行参数：--class 和 --process
-fn parse_args() -> Option<(String, Option<String>)> {
+/// 解析命令行参数：--class、--process 和 --title
+fn parse_args() -> Option<(String, Option<String>, Option<String>)> {
     let args: Vec<String> = std::env::args().collect();
 
     let mut class_name: Option<String> = None;
     let mut process_name: Option<String> = None;
+    let mut title_name: Option<String> = None;
 
     for i in 1..args.len() {
         // --class="xxxx" 形式
@@ -558,31 +559,47 @@ fn parse_args() -> Option<(String, Option<String>)> {
                 process_name = Some(name.clone());
             }
         }
+        // --title="xxxx" 形式
+        if args[i].starts_with("--title=") {
+            let name = args[i].split('=').nth(1).unwrap_or("");
+            if !name.is_empty() {
+                title_name = Some(name.to_string());
+            }
+        }
+        // --title xxxx 形式
+        if args[i] == "--title" && i + 1 < args.len() {
+            let name = &args[i + 1];
+            if !name.is_empty() {
+                title_name = Some(name.clone());
+            }
+        }
     }
 
     // --class 是必需参数
-    class_name.map(|c| (c, process_name))
+    class_name.map(|c| (c, process_name, title_name))
 }
 
 /// 查询窗口并输出 JSON（递归搜索所有窗口，包括子窗口）
-fn query_and_output(class_name: &str, process_name: Option<&str>) {
+/// 始终返回 JSON 数组，查不到时返回 []
+fn query_and_output(class_name: &str, process_name: Option<&str>, title_name: Option<&str>) {
     let windows = WindowsApi::enum_windows();
 
     // 递归搜索所有匹配的窗口
-    let found = find_all_windows_by_class(&windows, class_name);
+    let mut found = find_all_windows_by_class(&windows, class_name);
 
+    // 按进程名过滤
     if let Some(process) = process_name {
-        // 有进程名过滤，返回单个窗口
-        let filtered = found.iter().find(|w| w.process_name == process);
-        if let Some(win) = filtered {
-            println!("{}", format_json(win));
-        } else {
-            println!("null");
-        }
-    } else {
-        // 无进程名过滤，返回所有匹配窗口的数组
-        println!("{}", format_json_array(&found));
+        found.retain(|w| w.process_name == process);
     }
+
+    // 按标题过滤（子串匹配）
+    if let Some(title) = title_name {
+        let lower_title = title.to_lowercase();
+        found.retain(|w| w.title.to_lowercase().contains(&lower_title));
+    }
+
+    // 始终返回 JSON 数组
+    println!("{}", format_json_array(&found));
 }
 
 /// 递归查找所有指定类名的窗口（包括子窗口）
